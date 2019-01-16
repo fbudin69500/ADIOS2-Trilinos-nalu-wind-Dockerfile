@@ -1,5 +1,8 @@
 FROM dockbuild/ubuntu1804-gcc7
 
+# Number of jobs when compiling
+ARG JOBS=10
+
 # Use bash instead of sh
 SHELL ["/bin/bash", "-c"]
 
@@ -11,7 +14,7 @@ RUN git clone https://github.com/spack/spack.git
 ENV SPACK_ROOT /work/spack
 RUN source ${SPACK_ROOT}/share/spack/setup-env.sh && \
     spack bootstrap && \
-    spack install nalu-wind && \
+    spack install -j $JOBS  nalu-wind && \
     spack view -e nalu-wind -e trilinos symlink -i nalu-wind-workspace nalu-wind
 
 # Install .workspace.config
@@ -20,7 +23,9 @@ RUN cd /work && \
     cd terminal.workspace && git checkout origin/remove_local_not_in_functions_for_bash && cd .. &&\
     source terminal.workspace/workspace.config && \
     # Create .workspace.config for ADIOS folder
-    RUN echo 'local workspace_spack_packages=("openmpi")' > .workspace.config && \
+    echo 'local workspace_spack_packages=("openmpi")' > .workspace.config && \
+    # Environment variables could be saved with `ENV` but this facilitate keeping track of the
+    # value of these variables inside the docker image and docker container.
     echo 'workspace_env_var=("CMAKE_C_COMPILER_LAUNCHER=/usr/bin/ccache" "CMAKE_CXX_COMPILER_LAUNCHER=/usr/bin/ccache" '\
     '"CMAKE_PREFIX_PATH=/home/francois.budin/devel/adios/nalu-wind-spack-view-no-trilinos-no-nalu")' >> .workspace.config
 
@@ -31,7 +36,7 @@ RUN cd /work && \
     mkdir build && \
     cd build && \
     cmake -DADIOS2_USE_HDF5:BOOL=ON -DADIOS2_USE_MPI:BOOL=ON -DADIOS2_USE_SST:BOOL=ON .. && \
-    make -j
+    make -j$JOBS
 
 # Compile Trilinos:
 RUN cd /work && \
@@ -47,15 +52,15 @@ RUN cd /work && \
     -DTrilinos_ENABLE_PyTrilinos:BOOL=OFF -DTrilinos_ENABLE_STK:BOOL=ON \
     -DMPI_BIN_DIR:PATH=`dirname $(which mpiexec)` \
      .. && \
-    make -j12
+    make -j$JOBS
 
 # Compile and test nalu-wind:
 RUN cd /work \
     git clone https://github.com/Exawind/nalu-wind.git && \
     cd nalu-wind && \
-    sed -i 's/0.000000000000001/0.00001/' reg_tests/CMakeLists.txt
+    sed -i 's/0.000000000000001/0.00001/' reg_tests/CMakeLists.txt && \
     mkdir build && \
     cd build && \
     cmake -DENABLE_TESTS:BOOL=ON -DTrilinos_DIR:PATH=/work/Trilinos/build .. && \
-    make -j12 && \
+    make -j$JOBS && \
     ctest -E unitTest
