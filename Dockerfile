@@ -127,10 +127,10 @@ RUN path=$(which mpiexec) && \
 #####################################
 
 RUN cd nalu-wind/build-no-adios && \
-    ctest -E unitTest -V
+    ctest -R ablNeutralEdge -V
 
 RUN cd nalu-wind/build-adios && \
-    ctest -E unitTest -V
+    ctest -R ablNeutralEdge -V
 
 # Get testing data
 RUN mkdir /data && \
@@ -151,34 +151,45 @@ RUN cd Trilinos/build-no-adios && \
     # Test that `exodusii_mesh.out.bp` was created
     #
     ls exodusii_mesh.out && \
-    rm exodusii_mesh.out
+    rm exodusii_mesh*
 
 # Add tests to verify ADIOS2 integration in Trilinos
 RUN cd Trilinos/build-adios && \
-    packages/stk/stk_io/example/STKIO_io_mesh_read_write_example.exe gen:10x15x20 && \
+    packages/stk/stk_io/example/STKIO_io_mesh_read_write_example.exe --mesh gen:10x15x20 --type_out adios && \
     #
     # Test that `generated_mesh.out.bp` was created
     #
+    ls generated_mesh.out.bp \
+    # Keep test result for next test.
+    rm -r generated_mesh*
+
+# Test that if an ADIOS2 file is read and written, the copy is the same as the original (simple model)
+RUN cd Trilinos/build-adios && \
+    packages/stk/stk_io/example/STKIO_io_mesh_read_write_example.exe --mesh adios:generated_mesh.out.bp --type_out adios && \
+    #
+    # Test that `adios_mesh.out.bp` was created
+    #
     ls generated_mesh.out.bp && \
-    rm -r generated_mesh.out.bp\*
+    rm -r exodusii_mesh.out.bp* \
+    rm -r generated_mesh*
 
 # Test that ADIOS2 can write complex files
 RUN cd Trilinos/build-adios && \
-    time packages/stk/stk_io/example/STKIO_io_mesh_read_write_example.exe --mesh /data/nalu-wind-output-data/abl_5km_5km_1km_neutral.e.4.0 && \
+    time packages/stk/stk_io/example/STKIO_io_mesh_read_write_example.exe --mesh /data/nalu-wind-output-data/abl_5km_5km_1km_neutral.e.4.0 --type_out adios && \
     #
     # Test that `exodusii_mesh.out.bp` was created
     #
-    ls exodusii_mesh.out.bp && \
-    rm -r exodusii_mesh.out.bp\*
+    ls exodusii_mesh.out.bp
+    # Keep test result for next test.
 
 # Test that if an ADIOS2 file is read and written, the copy is the same as the original
 RUN cd Trilinos/build-adios && \
-    packages/stk/stk_io/example/STKIO_io_mesh_read_write_example.exe --mesh adios:exodusii_mesh.out.bp && \
+    packages/stk/stk_io/example/STKIO_io_mesh_read_write_example.exe --mesh adios:exodusii_mesh.out.bp --type_out adios && \
     #
     # Test that `adios_mesh.out.bp` was created
     #
     ls exodusii_mesh.out.bp && \
-    rm -r exodusii_mesh.out.bp\*
+    rm -r exodusii_mesh.out.bp*
 
 #####################################
 # Final steps for image configuration
